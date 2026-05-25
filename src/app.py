@@ -223,8 +223,28 @@ def root():
 
 
 @app.get("/capabilities")
-def get_capabilities():
-    return capabilities
+def get_capabilities(practice_area: str | None = None, search: str | None = None):
+    filtered_capabilities = capabilities
+
+    if practice_area:
+        expected_area = practice_area.strip().lower()
+        filtered_capabilities = {
+            name: details
+            for name, details in filtered_capabilities.items()
+            if details.get("practice_area", "").lower() == expected_area
+        }
+
+    if search:
+        query = search.strip().lower()
+        filtered_capabilities = {
+            name: details
+            for name, details in filtered_capabilities.items()
+            if query in name.lower()
+            or query in details.get("description", "").lower()
+            or query in details.get("practice_area", "").lower()
+        }
+
+    return filtered_capabilities
 
 
 @app.post("/auth/login")
