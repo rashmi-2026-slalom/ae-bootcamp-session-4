@@ -23,6 +23,37 @@ header {
   color: white;
   border-radius: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.auth-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-controls button {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.auth-controls button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.user-pill {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
 }
 
 .header-content {
@@ -164,6 +195,49 @@ section h3 {
   transform: scale(1.05);
 }
 
+.helper-text {
+  color: #4b5563;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+
+.request-card {
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background-color: #f8fbff;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.approve-btn,
+.reject-btn {
+  border: none;
+  border-radius: 6px;
+  color: white;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.approve-btn {
+  background-color: #1b8f4a;
+}
+
+.reject-btn {
+  background-color: #cc3d3d;
+}
+
+.approve-btn:hover,
+.reject-btn:hover {
+  opacity: 0.9;
+}
+
 .consultants-section p {
   color: #666;
   font-style: italic;
@@ -240,6 +314,36 @@ button[type="submit"]:hover {
   display: none;
 }
 
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 200;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 10px;
+  max-width: 420px;
+  width: 100%;
+  padding: 22px;
+  position: relative;
+}
+
+.close-modal {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
 footer {
   text-align: center;
   margin-top: 30px;
@@ -287,6 +391,13 @@ footer {
 
 /* Responsive design improvements */
 @media (max-width: 768px) {
+  .auth-controls {
+    position: static;
+    justify-content: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
   .header-content {
     flex-direction: column;
     gap: 10px;

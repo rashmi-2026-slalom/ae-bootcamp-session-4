@@ -1,0 +1,13 @@
+[
+  {
+    "username": "alex.practicelead",
+    "password_hash": "58dffcb7ae951aeca24fbef300d7b981$7aa130c35c09c14dfa5d2eb6e5dc5ae98034a65273de174702ee4811ee1f502d",
+    "role": "practice_lead",
+    "practice_areas": [
+      "Technology",
+      "Strategy",
+      "Operations"
+    ],
+    "approval_workflow": "required"
+  }
+]
