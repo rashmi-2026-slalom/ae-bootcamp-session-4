@@ -3,15 +3,158 @@ document.addEventListener("DOMContentLoaded", () => {
   const capabilitySelect = document.getElementById("capability");
   const registerForm = document.getElementById("register-form");
   const messageDiv = document.getElementById("message");
+  const approvalsContainer = document.getElementById("approvals-container");
+  const approvalsList = document.getElementById("approvals-list");
+  const authButton = document.getElementById("auth-button");
+  const currentUser = document.getElementById("current-user");
+  const loginModal = document.getElementById("login-modal");
+  const closeModal = document.getElementById("close-modal");
+  const loginForm = document.getElementById("login-form");
+
+  let authToken = localStorage.getItem("sessionToken");
+  let user = null;
+
+  async function apiFetch(url, options = {}) {
+    const headers = {
+      ...(options.headers || {}),
+    };
+
+    if (authToken) {
+      headers["X-Session-Token"] = authToken;
+    }
+
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }
+
+  function isPracticeLead() {
+    return user && user.role === "practice_lead";
+  }
+
+  function showMessage(text, type = "success") {
+    messageDiv.textContent = text;
+    messageDiv.className = type;
+    messageDiv.classList.remove("hidden");
+
+    setTimeout(() => {
+      messageDiv.classList.add("hidden");
+    }, 5000);
+  }
+
+  function renderAuthState() {
+    if (isPracticeLead()) {
+      authButton.textContent = "Logout";
+      currentUser.textContent = `Practice Lead: ${user.username}`;
+      approvalsContainer.classList.remove("hidden");
+    } else {
+      authButton.textContent = "Practice Lead Login";
+      currentUser.textContent = "Consultant View";
+      approvalsContainer.classList.add("hidden");
+    }
+  }
+
+  async function fetchCurrentUser() {
+    if (!authToken) {
+      user = null;
+      renderAuthState();
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/auth/me");
+      if (!response.ok) {
+        throw new Error("Session invalid");
+      }
+
+      user = await response.json();
+    } catch (error) {
+      authToken = null;
+      user = null;
+      localStorage.removeItem("sessionToken");
+    }
+
+    renderAuthState();
+  }
+
+  async function fetchPendingRequests() {
+    if (!isPracticeLead()) {
+      approvalsList.innerHTML = "<p>No pending requests.</p>";
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/registration-requests?status=pending");
+      const requests = await response.json();
+
+      if (!response.ok) {
+        approvalsList.innerHTML = "<p>Unable to load requests.</p>";
+        return;
+      }
+
+      if (!requests.length) {
+        approvalsList.innerHTML = "<p>No pending requests.</p>";
+        return;
+      }
+
+      approvalsList.innerHTML = requests
+        .map(
+          (request) => `
+            <div class="request-card">
+              <p><strong>${request.email}</strong> requested <strong>${request.capability}</strong></p>
+              <p class="helper-text">Requested at ${new Date(request.requested_at).toLocaleString()}</p>
+              <div class="request-actions">
+                <button class="approve-btn" data-id="${request.id}">Approve</button>
+                <button class="reject-btn" data-id="${request.id}">Reject</button>
+              </div>
+            </div>
+          `
+        )
+        .join("");
+
+      document.querySelectorAll(".approve-btn").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          const requestId = event.target.getAttribute("data-id");
+          const result = await apiFetch(`/registration-requests/${requestId}/approve`, {
+            method: "POST",
+          });
+          const payload = await result.json();
+          showMessage(payload.message || "Request approved", result.ok ? "success" : "error");
+          if (result.ok) {
+            fetchPendingRequests();
+            fetchCapabilities();
+          }
+        });
+      });
+
+      document.querySelectorAll(".reject-btn").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          const requestId = event.target.getAttribute("data-id");
+          const result = await apiFetch(`/registration-requests/${requestId}/reject`, {
+            method: "POST",
+          });
+          const payload = await result.json();
+          showMessage(payload.message || "Request rejected", result.ok ? "success" : "error");
+          if (result.ok) {
+            fetchPendingRequests();
+          }
+        });
+      });
+    } catch (error) {
+      approvalsList.innerHTML = "<p>Unable to load requests.</p>";
+    }
+  }
 
   // Function to fetch capabilities from API
   async function fetchCapabilities() {
     try {
-      const response = await fetch("/capabilities");
+      const response = await apiFetch("/capabilities");
       const capabilities = await response.json();
 
       // Clear loading message
       capabilitiesList.innerHTML = "";
+      capabilitySelect.innerHTML = '<option value="">-- Select a capability --</option>';
 
       // Populate capabilities list
       Object.entries(capabilities).forEach(([name, details]) => {
@@ -30,7 +173,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.consultants
                   .map(
                     (email) =>
-                      `<li><span class="consultant-email">${email}</span><button class="delete-btn" data-capability="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="consultant-email">${email}</span>${
+                        isPracticeLead()
+                          ? `<button class="delete-btn" data-capability="${name}" data-email="${email}">Remove</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -59,9 +206,11 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // Add event listeners to delete buttons
-      document.querySelectorAll(".delete-btn").forEach((button) => {
-        button.addEventListener("click", handleUnregister);
-      });
+      if (isPracticeLead()) {
+        document.querySelectorAll(".delete-btn").forEach((button) => {
+          button.addEventListener("click", handleUnregister);
+        });
+      }
     } catch (error) {
       capabilitiesList.innerHTML =
         "<p>Failed to load capabilities. Please try again later.</p>";
@@ -82,32 +231,26 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: authToken
+            ? {
+                "X-Session-Token": authToken,
+              }
+            : {},
         }
       );
 
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        showMessage(result.message, "success");
 
         // Refresh capabilities list to show updated consultants
         fetchCapabilities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(result.detail || "An error occurred", "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to unregister. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to unregister. Please try again.", "error");
       console.error("Error unregistering:", error);
     }
   }
@@ -120,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const capability = document.getElementById("capability").value;
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/capabilities/${encodeURIComponent(
           capability
         )}/register?email=${encodeURIComponent(email)}`,
@@ -132,31 +275,78 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        const messageType = result.status === "pending" ? "info" : "success";
+        showMessage(result.message, messageType);
         registerForm.reset();
 
         // Refresh capabilities list to show updated consultants
         fetchCapabilities();
+        fetchPendingRequests();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(result.detail || "An error occurred", "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to register. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to register. Please try again.", "error");
       console.error("Error registering:", error);
     }
   });
 
+  authButton.addEventListener("click", async () => {
+    if (isPracticeLead()) {
+      await apiFetch("/auth/logout", { method: "POST" });
+      authToken = null;
+      user = null;
+      localStorage.removeItem("sessionToken");
+      renderAuthState();
+      fetchCapabilities();
+      fetchPendingRequests();
+      return;
+    }
+
+    loginModal.classList.remove("hidden");
+  });
+
+  closeModal.addEventListener("click", () => {
+    loginModal.classList.add("hidden");
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+
+    try {
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        showMessage(payload.detail || "Unable to sign in", "error");
+        return;
+      }
+
+      authToken = payload.token;
+      localStorage.setItem("sessionToken", authToken);
+      user = payload.user;
+      loginModal.classList.add("hidden");
+      loginForm.reset();
+      renderAuthState();
+      showMessage(`Signed in as ${user.username}`, "success");
+      fetchCapabilities();
+      fetchPendingRequests();
+    } catch (error) {
+      showMessage("Unable to sign in. Please try again.", "error");
+    }
+  });
+
   // Initialize app
-  fetchCapabilities();
+  fetchCurrentUser().then(() => {
+    fetchCapabilities();
+    fetchPendingRequests();
+  });
 });
